@@ -4,7 +4,6 @@
 
 // ROS implementation of sensor synchronisation between sensors of
 // different frequencies.
-
 //---------------------------------------------------------------
 
 #include <cv_bridge/cv_bridge.h>
@@ -82,33 +81,28 @@ class SynchroBuffer {
  public:
   enum class Status { WAITING, INITIALIZING, NORMAL };
 
-  using CallbackType = cv::Mat(const cv::Mat&, const cv::Mat&,
-                               const std::vector<ORB_SLAM2::IMUData>&,
-                               const double&);
-
-  SynchroBuffer(ros::NodeHandle& nh, const ORB_SLAM2::ConfigParam& config,
-                std::function<CallbackType> data_processor)
+  //------------------------SynchroBuffer Class Instantiation------------------------
+  SynchroBuffer(ros::NodeHandle& nh, std::function<CallbackType> data_processor)
       : status(Status::WAITING),
-        image1_subscriber(nh, config._imageTopicLeft, 4),
+        image1_subscriber(nh, config._imageTopicLeft, 4), // message_filters Subscriber
         image2_subscriber(nh, config._imageTopicLeft, 4),
         imu_subscriber(nh, config._imuTopic, 200),
         sync(sync_pol(10), image1_subscriber, image2_subscriber,
              imu_subscriber),
         data_processor(data_processor),
         gravity_multiplier(config.GetAccMultiply9p8() ? config.GetG() : 1.0),
-        map_1x(config._map_1x),
-        map_1y(config._map_1y),
-        map_2x(config._map_2x),
-        map_2y(config._map_2y) {
-    auto _1 = std::placeholders::_1;
-    auto _2 = std::placeholders::_2;
-    auto _3 = std::placeholders::_3;
-    imu_subscriber.registerCallback(
-        std::bind(&SynchroBuffer::store_imu, this, _1));
-    sync.registerCallback(
-        std::bind(&SynchroBuffer::store_synchronized_data, this, _1, _2, _3));
-  }
+                            map_1x(config._map_1x),
+                            map_1y(config._map_1y),
+                            map_2x(config._map_2x),
+                            map_2y(config._map_2y) {
+          auto _1 = std::placeholders::_1;
+          auto _2 = std::placeholders::_2;
+          auto _3 = std::placeholders::_3;
+          imu_subscriber.registerCallback(std::bind(&SynchroBuffer::store_imu, this, _1));
+          sync.registerCallback(std::bind(&SynchroBuffer::store_synchronized_data, this, _1, _2, _3));
+        }
 
+  //------------------------IMU Buffer Callback------------------------
   // Callback for storing IMU messages in a buffer.
   // These are not collected in synchronization with the image messages.
   // After storing, the system attempts to process_data().
@@ -130,6 +124,7 @@ class SynchroBuffer {
     process_data();
   }
 
+  //------------------------Synchronised Data Callback------------------------
   // Callback for storing synchronized messages.
   // After storing, the system attempts to process_data().
   void store_synchronized_data(const sensor_msgs::ImageConstPtr& msg1,
@@ -153,13 +148,12 @@ class SynchroBuffer {
     process_data();
   }
 
+  //------------------------Processe Data------------------------
   // Process stored data, up until the timestamp of the synchronized data.
   // Also cleans up the used data in the process.
   bool process_data() {
-    // check if the buffered IMU msgs contain the IMU msg
-    // that came in through synchronization.  We can't just add
-    // the one through synchronization, as we might still have to store
-    // some non-synchronized IMU messages.
+    // check if the buffered IMU msgs contain the IMU msg that came through the synchronization.  
+    // We need to add the other IMU msgs that occured from the last synchronized msg (IMU higher Hz).
     std::vector<ORB_SLAM2::IMUData> copied_buffer;
     cv::Mat copied_image1;
     cv::Mat copied_image2;
@@ -181,7 +175,6 @@ class SynchroBuffer {
       } catch (cv_bridge::Exception& e) {
         ROS_ERROR("cv_bridge exception: %s", e.what());
       }
-
       std::copy(std::begin(imu_buffer), pos, std::back_inserter(copied_buffer));
       // Clean up the used data.  First delete the buffer of IMU messages,
       // and *then* reset the smart pointers.  Otherwise, you can't find
@@ -190,10 +183,7 @@ class SynchroBuffer {
       image1.reset();
       image2.reset();
     }
-
-    // process
-    data_processor(copied_image1, copied_image2, copied_buffer, timestamp);
-
+    data_processor(copied_image1, copied_image2, copied_buffer, timestamp); // process
     return true;
   }
 
@@ -210,7 +200,8 @@ class SynchroBuffer {
                               msg->angular_velocity.z, ax, ay, az,
                               msg->header.stamp.toSec());
   }
-
+  
+  //---------------Synchronisation "Main"-------------------
   std::mutex buffer_mutex;
   std::mutex synchronize_mutex;
 
@@ -231,6 +222,7 @@ class SynchroBuffer {
       sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Imu>;
   message_filters::Synchronizer<sync_pol> sync;
 
+  using CallbackType = cv::Mat(const cv::Mat&, const cv::Mat&, const std::vector<ORB_SLAM2::IMUData>&, const double&);
   std::function<CallbackType> data_processor;
 
   double gravity_multiplier;
