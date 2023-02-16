@@ -1,4 +1,5 @@
 // This script opens a rosbag file and saves synchronised camera topics to a struct
+// Adapted from http://wiki.ros.org/rosbag/Cookbook#Analyzing_Stereo_Camera_Data
 
 #include <ros/ros.h>
 #include <rosbag/bag.h>
@@ -13,6 +14,7 @@
 #include <sensor_msgs/Image.h>
 //#include <sensor_msgs/CameraInfo.h>
 
+//-------------------------CLASSES-------------------------------------------------------
 // A struct to hold the synchronized camera stereo data 
 class StereoData
 {
@@ -44,6 +46,7 @@ public:
 };
 
 
+//-------------------------FUNCTIONS-------------------------------------------------------
 // Callback for synchronizing stereo messages and saving them in a struct
 void stereoSynchCallback(const sensor_msgs::Image::ConstPtr &img0, 
               const sensor_msgs::Image::ConstPtr &img1) 
@@ -121,6 +124,7 @@ void loadBag(const std::string &filename)
 
 
 
+//-------------------------MAIN-------------------------------------------------------
 int main(int argc, char** argv)
 {
    // Create a ROS node

@@ -1,5 +1,5 @@
 //---------------------------------------------------------------
-// Original Author: Patrick de Kok
+// Original Author: Patrick de Kok (https://github.com/pkok/VI_ORB_SLAM2/blob/38d86ed0e5c217b19d8dd0cd6cac4f909506a461/Examples/ROS/ORB_VIO/src/test.cc)
 // Edited by: Adrienne Winter
 
 // ROS implementation of sensor synchronisation between sensors of
