@@ -56,7 +56,7 @@ void stereoSynchCallback(const sensor_msgs::Image::ConstPtr &img0,
   StereoData sd(img0, img1); //info0, info1); // struct - should this not be stereo_dataset_?
 
   // stereo_dataset_ is class variable to store data
-  stereo_dataset_.push_back(sd);
+  stereoDataset.push_back(sd);
 }
  
 

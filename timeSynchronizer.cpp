@@ -1,5 +1,8 @@
 // This ROS node uses the Time Synchronizer filter from the message_filters ROS package. We use the Subscriber filter from the same package as a wrapper to let the Time Synchroniser filter access the desired ROS topics.
 
+#include <ros/ros.h>
+#include <rosbag/bag.h>
+#include <rosbag/view.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
@@ -14,11 +17,8 @@ using namespace message_filters;
 
 void SynchronizerCallback(const ImageConstPtr& image0_msg, const ImageConstPtr& image1_msg, const Vector3StampedConstPtr& imu_accel_msg, const Vector3StampedConstPtr& imu_gyro_msg, const StringConstPtr& prs_msg) 
 {
-   // I think that all topics published here will be synchronised - or do I not even need to re-publish them???
    // Topics: IMU_sync, Cam0_sync, Cam1_sync, Prs_sync
-   // Does the IMU keep its higher rate?
-   ROS_INFO("Pressure is: [%s]", msg->data.c_str());
-   ROS_INFO("Image0 is: [%s]", image0->data.c_str());//this might not work for images - find a way to print timestamps?
+   //Save to synched buffer
 }
 
 
@@ -30,7 +30,14 @@ void IMU_BufferCallback(const Vector3StampedConstPtr& imu_accel_msg, const Vecto
 
 
 
-void mergeData()
+void readBag(const std::string &filename)
+{
+
+}
+
+
+
+void mergeBuffers()
 {
 
 }

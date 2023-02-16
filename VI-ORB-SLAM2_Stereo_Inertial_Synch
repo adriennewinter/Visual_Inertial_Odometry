@@ -176,9 +176,7 @@ class SynchroBuffer {
         ROS_ERROR("cv_bridge exception: %s", e.what());
       }
       std::copy(std::begin(imu_buffer), pos, std::back_inserter(copied_buffer));
-      // Clean up the used data.  First delete the buffer of IMU messages,
-      // and *then* reset the smart pointers.  Otherwise, you can't find
-      // the used synced_imu in the buffer.
+      // Clean up the used data.  First delete the buffer of IMU messages, and *then* reset the smart pointers. Otherwise, you can't find the used synced_imu in the buffer.
       while (!imu_msg_equal(imu_buffer.front())) imu_buffer.pop_front();
       image1.reset();
       image2.reset();
@@ -201,7 +199,7 @@ class SynchroBuffer {
                               msg->header.stamp.toSec());
   }
   
-  //---------------Synchronisation "Main"-------------------
+  //---------------Synchronisation Class "Main"-------------------
   std::mutex buffer_mutex;
   std::mutex synchronize_mutex;
 
