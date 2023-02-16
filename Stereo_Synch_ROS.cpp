@@ -8,6 +8,7 @@
 
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
+#include <message_filters/simple_filter.h>
 
 #include <sensor_msgs/Image.h>
 //#include <sensor_msgs/CameraInfo.h>
@@ -43,8 +44,8 @@ public:
 };
 
 
-// Callback for synchronizing messages
-void synchCallback(const sensor_msgs::Image::ConstPtr &img0, 
+// Callback for synchronizing stereo messages and saving them in a struct
+void stereoSynchCallback(const sensor_msgs::Image::ConstPtr &img0, 
               const sensor_msgs::Image::ConstPtr &img1) 
               //const sensor_msgs::CameraInfo::ConstPtr &info0,
               //const sensor_msgs::CameraInfo::ConstPtr &info1)
@@ -82,21 +83,21 @@ void loadBag(const std::string &filename)
   
   // Use time synchronizer to make sure we get properly synchronized images
   message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image> sync(img0_sub, img1_sub, 25);
-  sync.registerCallback(boost::bind(&synchCallback, _1, _2));
+  sync.registerCallback(boost::bind(&stereoSynchCallback, _1, _2));
   
   // Load all messages into our stereo dataset
-  BOOST_FOREACH(rosbag::MessageInstance const m, view)
+  BOOST_FOREACH(rosbag::MessageInstance const msg, view)
   {
-    if (m.getTopic() == cam0_image || ("/" + m.getTopic() == cam0_image))
+    if (msg.getTopic() == cam0_image || ("/" + msg.getTopic() == cam0_image))
     {
-      sensor_msgs::Image::ConstPtr img0 = m.instantiate<sensor_msgs::Image>();
+      sensor_msgs::Image::ConstPtr img0 = msg.instantiate<sensor_msgs::Image>();
       if (img0 != NULL)
-        img0_sub.newMessage(img0);
+        img0_sub.newMessage(img0); // call the stereoSynchCallback
     }
     
-    if (m.getTopic() == cam1_image || ("/" + m.getTopic() == cam1_image))
+    if (msg.getTopic() == cam1_image || ("/" + msg.getTopic() == cam1_image))
     {
-      sensor_msgs::Image::ConstPtr img1 = m.instantiate<sensor_msgs::Image>();
+      sensor_msgs::Image::ConstPtr img1 = msg.instantiate<sensor_msgs::Image>();
       if (img1 != NULL)
         img1_sub.newMessage(img1);
     }
@@ -116,4 +117,18 @@ void loadBag(const std::string &filename)
     //}
   }
   bag.close();
+}
+
+
+
+int main(int argc, char** argv)
+{
+   // Create a ROS node
+   ros::init(argc, argv, "synchronizer_node");
+   ros::NodeHandle nh;
+ 
+   loadBag("~/Documents/ROS_Workspace/rosbags")
+ 
+   ros::spin(); // is this needed?
+   return 0;
 }

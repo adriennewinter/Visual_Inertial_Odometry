@@ -60,10 +60,8 @@ int main(int argc, char** argv)
    Synchronizer<ApproxTimeSyncPolicy> sync(ApproxTimeSyncPolicy(100), image0_sub, image1_sub, accel_sub, gyro_sub, pressure_sub);
    sync.registerCallback(boost::bind(&SynchronizerCallback, _1, _2, _3, _4, _5));
 
-
    //Create ROS publishers here for publishing the synchronised topics to then rosbag record as synched?
  
    ros::spin();
- 
    return 0;
 }
