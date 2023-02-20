@@ -1,12 +1,15 @@
 // -----------------------------------------------------------------------------------------
 // Author: Adrienne Winter, 2023
 //
-// This script opens a rosbag file and saves synchronised camera topics to a new rosbag
-// Usage: create a package in your ROS src directory called stereoSynch
-// $ rosrun stereoSynch stereoSynch_node
+// This script opens a rosbag file and saves synchronised camera image topics to a new rosbag.
+// Usage: create a package in your ROS src directory called stereoSynch.
+// $ rosrun StereoSynch StereoSynch_node
 //
 // You may have to remove the "protected:" above the signalMessage function in simple_filter.h
 // $ sudo gedit /opt/ros/melodic/include/message_filters/simple_filter.h
+//
+// Remember to set the path to the rosbag you want to open and the two camera image/video topic
+// variables under GLOBAL VARIABLES.
 // -----------------------------------------------------------------------------------------
 
 #include <boost/foreach.hpp>
@@ -27,17 +30,27 @@
 using namespace std;
 
 //-------------------------GLOBAL VARIABLES-----------------------------------------------------
-int synchs = 0; // Synched image pairs counter
+std::string rosbagFile = "/home/user/Documents/ROS_Workspace/rosbags/AllSensors_600x600_15fps_100Hz_1Hz_2023-02-15.bag";
+std::string cam0_topic = "/video_source_0/raw";
+std::string cam1_topic = "/video_source_1/raw";
+int synchs_cnt = 0; // Synched image pairs counter
 
 
 //-------------------------FUNCTIONS-------------------------------------------------------
 // Callback for synchronizing stereo messages and saving them in a queue
-void stereoSynchCallback(const sensor_msgs::Image::ConstPtr& img0, const sensor_msgs::Image::ConstPtr& img1) 
+void stereoSynchCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_msgs::Image::ConstPtr& img1_msg) 
 {
-  synchs += 1;
+  synchs_cnt += 1;
   
-  // Just write to the new bag here
-
+  // Write synchronised image messages to a new rosbag
+  rosbag::Bag bag;
+  bag.open("synchedStereoBag.bag", rosbag::bagmode::Write);
+  
+  // does the synchronizer filter already set the same timestamp? 
+  // Does it over-write the originals with a new stamp?
+  // should I set both messages with the same timestamp and choose one of the messages? img0->header.stamp;
+  bag.write(cam0_topic, img0->header.stamp, *img0_msg); 
+  bag.write(cam1_topic, img1->header.stamp, *img1_msg);
 }
  
  
@@ -89,9 +102,6 @@ void readBag(const std::string& filename, ros::NodeHandle& nh)
   }
   bag.close();
   cout << "Closing the bag file." << endl;
-  cout << "Total img0_sub callbacks = " << i << endl;
-  cout << "Total img1_sub callbacks = " << j << endl;
-  cout << "Entered callback " << synchs << " times." << endl;
 }
 
 
@@ -103,13 +113,12 @@ int main(int argc, char** argv)
    // Create a ROS node
    ros::init(argc, argv, "synchronizer_node");
    ros::NodeHandle nh;
-   cout << "Created ROS synchronizer_node." << endl;
- 
-   std::string rosbagFile = "/home/user/Documents/ROS_Workspace/rosbags/AllSensors_600x600_15fps_100Hz_1Hz_2023-02-15.bag";
-   std::string cam0_topic = "/video_source_0/raw";
-   std::string cam1_topic = "/video_source_1/raw";
 
    readBag(rosbagFile, nh);
+
+   cout << "Total img0 callbacks = " << i << endl;
+   cout << "Total img1 callbacks = " << j << endl;
+   cout << "Total synched messages " << synchs_cnt << endl;
  
    ros::spin(); 
    return 0;
