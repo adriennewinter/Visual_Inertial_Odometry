@@ -30,44 +30,55 @@
 using namespace std;
 
 //-------------------------GLOBAL VARIABLES-----------------------------------------------------
-std::string rosbagFile = "/home/user/Documents/ROS_Workspace/rosbags/AllSensors_600x600_15fps_100Hz_1Hz_2023-02-15.bag";
+std::string rosbagFolderPath = "/home/user/Documents/ROS_Workspace/rosbags/";
+std::string rosbagName = "AllSensors_600x600_15fps_100Hz_1Hz_2023-02-15.bag";
 std::string cam0_topic = "/video_source_0/raw";
 std::string cam1_topic = "/video_source_1/raw";
-int synchs_cnt = 0; // Synched image pairs counter
+int synchs_cnt = 0; 
+int i, j = 0;
+
 
 
 //-------------------------FUNCTIONS-------------------------------------------------------
-// Callback for synchronizing stereo messages and saving them in a queue
-void stereoSynchCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_msgs::Image::ConstPtr& img1_msg) 
+void synchFilterCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_msgs::Image::ConstPtr& img1_msg)
+// Callback for synchronizing stereo messages and saving them in a rosbag
 {
-  synchs_cnt += 1;
+  // ISSUE: without 'if' the rosbag gets re-created every synch event and only 1 msg is stored in the end
+  // With 'if' the code kills on second synch event - rosbag IO error can't find open bag
+  // I have tried: creating a class node to make synched_bag global within the class
+                // creating the ros::init and ros::nodeHandle as global vars - ros::init needs argc and argv
   
-  // Write synchronised image messages to a new rosbag
-  rosbag::Bag bag;
-  bag.open("synchedStereoBag.bag", rosbag::bagmode::Write);
+  rosbag::Bag synched_bag;
+
+  if(synchs_cnt == 0)
+  {
+    // Create empty rosbag to write synched messages into 
+    synched_bag.open(rosbagFolderPath+"synchedStereo.bag", rosbag::bagmode::Write);
+  }      
   
+  // Write synchronised image messages to a new rosbag  
   // does the synchronizer filter already set the same timestamp? 
   // Does it over-write the originals with a new stamp?
   // should I set both messages with the same timestamp and choose one of the messages? img0->header.stamp;
-  bag.write(cam0_topic, img0->header.stamp, *img0_msg); 
-  bag.write(cam1_topic, img1->header.stamp, *img1_msg);
-}
- 
- 
+  synched_bag.write(cam0_topic, img0_msg->header.stamp, *img0_msg); 
+  synched_bag.write(cam1_topic, img1_msg->header.stamp, *img1_msg);
 
+  synchs_cnt += 1;
+}
+
+
+
+void synchronizeBag(const std::string& filename, ros::NodeHandle nh)
 // Load rosbag, iterate through the messages on each topic and call the synchronizer callback
-void readBag(const std::string& filename, ros::NodeHandle& nh)
 {
-  rosbag::Bag bag;
-  bag.open(filename, rosbag::bagmode::Read);
-  cout << "Opening bag file." << endl;
-  
-  // create a vector of topics to iterate through
-  std::vector<std::string> topics;
+  // Load unsynched rosbag
+  rosbag::Bag unsynched_bag;
+  unsynched_bag.open(filename, rosbag::bagmode::Read);
+  std::vector<std::string> topics; // create a vector of topics to iterate through
   topics.push_back(cam0_topic);
   topics.push_back(cam1_topic);
-  
-  rosbag::View rosbagView(bag, rosbag::TopicQuery(topics));
+  rosbag::View rosbagView(unsynched_bag, rosbag::TopicQuery(topics));
+  cout << "Opening unsynched bag file." << endl;
 
   // Set up message_filters subscribers to capture images from the bag
   message_filters::Subscriber<sensor_msgs::Image> img0_sub(nh, cam0_topic, 10); 
@@ -76,19 +87,17 @@ void readBag(const std::string& filename, ros::NodeHandle& nh)
   // Use an approximate time synchronizer to synchronize image messages
   typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> approxTimePolicy;
   message_filters::Synchronizer<approxTimePolicy> sync(approxTimePolicy(100), img0_sub, img1_sub);
-  sync.registerCallback(boost::bind(&stereoSynchCallback, _1, _2));
-  
-  int i = 0;
-  int j = 0;
+  sync.registerCallback(boost::bind(&synchFilterCallback, _1, _2));
 
   // Iterate through all messages on all topics in the bag and send them to the synchronizer callback
+  cout << "Writing to synched bag." << endl;
   BOOST_FOREACH(rosbag::MessageInstance const msg, rosbagView)
   {
     if (msg.getTopic() == cam0_topic)
     {
       sensor_msgs::Image::ConstPtr img0 = msg.instantiate<sensor_msgs::Image>();
       if (img0 != NULL)
-        img0_sub.signalMessage(img0); // call the stereoSynchCallback 
+        img0_sub.signalMessage(img0); // call the synchFilterCallback 
         i += 1;
     }
     
@@ -100,8 +109,11 @@ void readBag(const std::string& filename, ros::NodeHandle& nh)
         j += 1;
     }
   }
-  bag.close();
-  cout << "Closing the bag file." << endl;
+  unsynched_bag.close();
+  cout << "Closing bag file." << endl;
+  cout << "Total img0 callbacks = " << i << endl;
+  cout << "Total img1 callbacks = " << j << endl;
+  cout << "Total synched messages = " << synchs_cnt << endl;
 }
 
 
@@ -110,17 +122,15 @@ void readBag(const std::string& filename, ros::NodeHandle& nh)
 //TODO add commandline implementation for rosbag path/name and image topic names
 int main(int argc, char** argv)
 {
-   // Create a ROS node
-   ros::init(argc, argv, "synchronizer_node");
-   ros::NodeHandle nh;
+  ros::init(argc, argv, "synchronize_node");
+  ros::NodeHandle nh;
 
-   readBag(rosbagFile, nh);
+  while(ros::ok)
+  {
+    synchronizeBag(rosbagFolderPath+rosbagName, nh);
 
-   cout << "Total img0 callbacks = " << i << endl;
-   cout << "Total img1 callbacks = " << j << endl;
-   cout << "Total synched messages " << synchs_cnt << endl;
+    ros::spin(); 
+  }
  
-   ros::spin(); 
-   return 0;
+  return 0;
 }
-
