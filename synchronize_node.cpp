@@ -43,7 +43,7 @@ int synchs_cnt = 0; // Synched image pairs counter
 
 
 //-------------------------FUNCTIONS-------------------------------------------------------
-// Callback for synchronizing stereo messages and saving them in a queue
+// Callback for synchronizing stereo messages
 void stereoSynchCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_msgs::Image::ConstPtr& img1_msg) 
 {
   synchs_cnt += 1;
