@@ -41,9 +41,8 @@ int synchs_cnt, i, j = 0;
 
 //-------------------------FUNCTIONS-------------------------------------------------------
 void synchFilterCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_msgs::Image::ConstPtr& img1_msg)
-// Callback for synchronizing stereo messages and saving them in a rosbag
-{
-  // Write synchronised image messages to a queue  
+// Callback for synchronizing stereo messages (approximate time synchronizer message_filter) and saving them in a queue
+{ 
   img0_queue.push(*img0_msg);
   img1_queue.push(*img1_msg);
 
@@ -52,20 +51,20 @@ void synchFilterCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sen
 
 
 
-void writeToBag(rosbag::Bag synched_bag)
+void writeToBag(rosbag::Bag& synched_bag)
+// Write queued synchronized image messages to the synched rosbag
 {
   sensor_msgs::Image img0_msg, img1_msg;
 
   if(!img0_queue.empty() && !img1_queue.empty())
   {
     // Get latest synched messages from queues and remove the messages from the queues
-    img0_msg = img0_queue.pop();
-    img1_msg = img1_queue.pop();
+    img0_msg = img0_queue.front();
+    img1_msg = img1_queue.front();
+    img0_queue.pop();
+    img1_queue.pop();
 
-    // Write synched pair of messages to a rosbag
-    // does the synchronizer filter already set the same timestamp? 
-    // Does it over-write the originals with a new stamp?
-    // should I set both messages with the same timestamp and choose one of the messages? img0->header.stamp;
+    // Write a synched pair of messages to a rosbag
     synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
     synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
   }
@@ -73,7 +72,7 @@ void writeToBag(rosbag::Bag synched_bag)
 
 
 
-void synchronizeBag(const std::string& filename, ros::NodeHandle nh)
+void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
 // Load rosbag, iterate through the messages on each topic and call the synchronizer callback
 {
   // Load unsynched rosbag
@@ -99,7 +98,7 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle nh)
   sync.registerCallback(boost::bind(&synchFilterCallback, _1, _2));
 
   // Iterate through all messages on all topics in the bag and send them to the synchronizer callback
-  cout << "Writing to synched bag." << endl;
+  cout << "Writing to synched bag file. This will take a few minutes..." << endl;
   BOOST_FOREACH(rosbag::MessageInstance const msg, rosbagView)
   {
     if (msg.getTopic() == cam0_topic)
@@ -133,15 +132,14 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle nh)
 //TODO add commandline implementation for rosbag path/name and image topic names
 int main(int argc, char** argv)
 {
+  // Create synchronize ROS node
   ros::init(argc, argv, "synchronize_node");
   ros::NodeHandle nh;
 
-  while(ros::ok)
-  {
-    synchronizeBag(rosbagFolderPath+unsynchedBagName, nh);
+  synchronizeBag(rosbagFolderPath+unsynchedBagName, nh);
 
-    ros::spin(); 
-  }
+  ros::spin(); 
  
   return 0;
 }
+
