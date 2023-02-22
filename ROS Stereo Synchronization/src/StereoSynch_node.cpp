@@ -2,14 +2,17 @@
 // Author: Adrienne Winter, 2023
 //
 // This script opens a rosbag file and saves synchronised camera image topics to a new rosbag.
-// Usage: create a package in your ROS src directory called stereoSynch.
+// It makes use of the ROS package message_filters - approximate time synchronizer.
+// Written and tested in ROS1 Melodic environment.
+// 
+// Usage: create a package in your ROS src directory called StereoSynch.
 // $ rosrun StereoSynch StereoSynch_node
 //
 // You may have to remove the "protected:" above the signalMessage function in simple_filter.h
 // $ sudo gedit /opt/ros/melodic/include/message_filters/simple_filter.h
 //
-// Remember to set the path to the rosbag you want to open and the two camera image/video topic
-// variables under GLOBAL VARIABLES.
+// Remember to set the path to the rosbag you want to open and the two camera image/video topics
+// under GLOBAL VARIABLES.
 // -----------------------------------------------------------------------------------------
 
 #include <boost/foreach.hpp>
@@ -31,7 +34,7 @@ using namespace std;
 
 //-------------------------GLOBAL VARIABLES-----------------------------------------------------
 std::string rosbagFolderPath = "/home/user/Documents/ROS_Workspace/rosbags/";
-std::string unsynchedBagName = "AllSensors_600x600_15fps_100Hz_1Hz_2023-02-15.bag";
+std::string unsynchedBagName = "Cams.bag";
 std::string cam0_topic = "/video_source_0/raw";
 std::string cam1_topic = "/video_source_1/raw";
 
@@ -41,7 +44,7 @@ int synchs_cnt, i, j = 0;
 
 //-------------------------FUNCTIONS-------------------------------------------------------
 void synchFilterCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_msgs::Image::ConstPtr& img1_msg)
-// Callback for synchronizing stereo messages (approximate time synchronizer message_filter) and saving them in a queue
+// Callback for synchronizing stereo messages (approximate time synchronizer - message_filter) and saving them in a queue
 { 
   img0_queue.push(*img0_msg);
   img1_queue.push(*img1_msg);
@@ -94,8 +97,6 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
   
   // Use an approximate time synchronizer to synchronize image messages
   typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> approxTimePolicy;
-  //ros::Duration maxInterval = ros::Duration(0.5,0);
-  //message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>::setMaxIntervalDuration(maxInterval); // set maximum synchronization timestamp interval to (seconds, nanoseconds)
   message_filters::Synchronizer<approxTimePolicy> sync(approxTimePolicy(100), img0_sub, img1_sub);
   sync.registerCallback(boost::bind(&synchFilterCallback, _1, _2));
 
@@ -131,7 +132,6 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
 
 
 //-------------------------MAIN-------------------------------------------------------
-//TODO add commandline implementation for rosbag path/name and image topic names
 int main(int argc, char** argv)
 {
   // Create synchronize ROS node
