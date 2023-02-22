@@ -94,7 +94,8 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
   
   // Use an approximate time synchronizer to synchronize image messages
   typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> approxTimePolicy;
-  approxTimePolicy.setMaxIntervalDuration(ros::Duration(0.5;0)); // set maximum synchronization timestamp interval to (seconds, nanoseconds)
+  //ros::Duration maxInterval = ros::Duration(0.5,0);
+  //message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>::setMaxIntervalDuration(maxInterval); // set maximum synchronization timestamp interval to (seconds, nanoseconds)
   message_filters::Synchronizer<approxTimePolicy> sync(approxTimePolicy(100), img0_sub, img1_sub);
   sync.registerCallback(boost::bind(&synchFilterCallback, _1, _2));
 
@@ -143,4 +144,5 @@ int main(int argc, char** argv)
  
   return 0;
 }
+
 
