@@ -1,22 +1,17 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>synchronize</name>
+  <name>StereoSynch</name>
   <version>0.0.0</version>
-  <description>The synchronize package</description>
+  <description>The Stereo Synchronization package</description>
 
   <maintainer email="user@todo.todo">user</maintainer>
 
-
   <license>TODO</license>
 
-
   <buildtool_depend>catkin</buildtool_depend>
-
   <depend>message_filters</depend>
   <depend>rosbag</depend>
   <depend>roscpp</depend>
-  <depend>rospy</depend>
   <depend>sensor_msgs</depend>
-
 
 </package>
