@@ -35,14 +35,12 @@
 using namespace std;
 
 //-------------------------GLOBAL VARIABLES-----------------------------------------------------
-std::string rosbagFile = "/home/user/Documents/ROS_Workspace/rosbags/AllSensors_600x600_15fps_100Hz_1Hz_2023-02-15.bag";
+std::string rosbagFolderPath = "/home/user/Documents/ROS_Workspace/rosbags";
+std::string unsynchedBagName = "AllSensors_600x600_15fps_100Hz_1Hz_2023-02-15.bag";
 std::string cam0_topic = "/video_source_0/raw";
 std::string cam1_topic = "/video_source_1/raw";
-std::string accel_topic = "imu/acceleration";
-std::string gyro_topic = "imu/angular_velocity";
-
-int synch_cnt, i, j, k, l = 0; 
-std::vector<stereo_inertial> SynchedMsgsVec;
+std::string accel_topic = "/imu/acceleration";
+std::string gyro_topic = "/imu/angular_velocity";
 
 struct stereo_inertial {
   sensor_msgs::Image img0;
@@ -50,6 +48,11 @@ struct stereo_inertial {
   geometry_msgs::Vector3Stamped accel;
   geometry_msgs::Vector3Stamped gyro;
 };
+
+int synch_cnt, i, j, k, l = 0; 
+std::vector<stereo_inertial> SynchedMsgsVec;
+
+
 
 
 
@@ -61,7 +64,7 @@ void SynchCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_ms
 
   // Insert synched messages into the struct
   StereoInertialStruct.img0 = *img0_msg;
-  StereoInertialStruct.img0 = *img0_msg;
+  StereoInertialStruct.img1 = *img1_msg;
   StereoInertialStruct.accel = *accel_msg;
   StereoInertialStruct.gyro = *gyro_msg;
 
@@ -74,6 +77,39 @@ void SynchCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_ms
 
 
 //-------------------------FUNCTIONS-------------------------------------------------------
+void writeToBag(rosbag::Bag& synched_bag)
+// Write synchronized messages to the synched rosbag
+{
+  sensor_msgs::Image img0_msg, img1_msg;
+  geometry_msgs::Vector3Stamped accel_msg, gyro_msg;
+  struct stereo_inertial StereoInertialStruct;
+
+  if(!SynchedMsgsVec.empty())
+  {
+    // Get latest synched messages from the vector and then delete them from the vector 
+    StereoInertialStruct = SynchedMsgsVec.front();
+    SynchedMsgsVec.erase(SynchedMsgsVec.begin());
+
+    img0_msg = StereoInertialStruct.img0;
+    img1_msg = StereoInertialStruct.img1;
+    accel_msg = StereoInertialStruct.accel;
+    gyro_msg = StereoInertialStruct.gyro;
+
+    cout << "img0 timestamp = " << img0_msg.header.stamp << endl;
+    cout << "img1 timestamp = " << img1_msg.header.stamp << endl;
+    cout << "accel timestamp = " << accel_msg.header.stamp << endl;
+    cout << "gyro timestamp = " << gyro_msg.header.stamp << endl;
+
+    // Write a synched set of messages to a rosbag
+    synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
+    synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
+    synched_bag.write(accel_topic, accel_msg.header.stamp, accel_msg); 
+    synched_bag.write(gyro_topic, gyro_msg.header.stamp, gyro_msg);
+  }
+}
+
+
+
 void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
 // Load rosbag, iterate through the messages on each topic and call the synchronizer callback
 {
@@ -90,7 +126,7 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
 
   // Create empty rosbag to write synched messages into 
   rosbag::Bag synched_bag;
-  synched_bag.open(rosbagFolderPath+"StereoInertialSynched.bag", rosbag::bagmode::Write); 
+  synched_bag.open(rosbagFolderPath+"/"+"StereoInertialSynched.bag", rosbag::bagmode::Write); 
 
   // Set up message_filters subscribers to capture messages from the bag
   message_filters::Subscriber<sensor_msgs::Image> img0_sub(nh, cam0_topic, 10); 
@@ -146,42 +182,7 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
   unsynched_bag.close();
   synched_bag.close();
   cout << "Closing both bag files." << endl;
-  cout << "Total img0 callbacks = " << i << endl;
-  cout << "Total img1 callbacks = " << j << endl;
-  cout << "Total accel callbacks = " << k << endl;
-  cout << "Total gyro callbacks = " << l << endl;
-  cout << "Total synched messages = " << synch_cnt << endl;
 }
-
-
-
-
-void writeToBag(rosbag::Bag& synched_bag)
-// Write synchronized messages to the synched rosbag
-{
-  sensor_msgs::Image img0_msg, img1_msg;
-  geometry_msgs::Vector3Stamped accel_msg, gyro_msg;
-  struct stereo_inertial StereoInertialStruct;
-
-  if(!SynchedMsgsVec.empty())
-  {
-    // Get latest synched messages from the vector and then delete them from the vector 
-    StereoInertialStruct = SynchedMsgsVec.front();
-    SynchedMsgsVec.erase(SynchedMsgsVec.begin());
-
-    img0_msg = StereoInertialStruct.img0;
-    img1_msg = StereoInertialStruct.img1;
-    accel_msg = StereoInertialStruct.accel;
-    gyro_msg = StereoInertialStruct.gyro;
-
-    // Write a synched set of messages to a rosbag
-    synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
-    synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
-    synched_bag.write(accel_topic, accel_msg.header.stamp, accel_msg); 
-    synched_bag.write(gyro_topic, gyro_msg.header.stamp, gyro_msg);
-  }
-}
-
 
 
 
@@ -191,14 +192,21 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "synchronize_node");
   ros::NodeHandle nh;
 
-  synchronizeBag(rosbagFolderPath+unsynchedBagName, nh);
+  synchronizeBag(rosbagFolderPath+"/"+unsynchedBagName, nh);
    
   // Register the IMU_buffer callback
   // can you register the same callback with two subscribers?
   // possibly just use /imu as the topic and then separate the topics further down the line when needed
   // but the imu and acceleration might not be exactly synched themselves?
-  accel_sub.registerCallback(IMU_BufferCallback);
-  gyro_sub.registerCallback(IMU_BufferCallback);
+  //accel_sub.registerCallback(IMU_BufferCallback);
+  //gyro_sub.registerCallback(IMU_BufferCallback);
+
+  cout << "Total img0 callbacks = " << i << endl;
+  cout << "Total img1 callbacks = " << j << endl;
+  cout << "Total accel callbacks = " << k << endl;
+  cout << "Total gyro callbacks = " << l << endl;
+  cout << "Total synched messages = " << synch_cnt << endl;
+  cout << "Ctrl+C to kill the node." << endl;
 
   ros::spin();
   return 0;
