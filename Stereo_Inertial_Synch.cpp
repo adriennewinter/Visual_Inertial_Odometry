@@ -88,15 +88,15 @@ void search_imuBuffer(const sensor_msgs::Imu::ConstPtr& imuSynchedMsg)
 // Look through the messages in the IMU deque to find the message that came through the synchronizer callback
 // Add any earlier IMU messages that occured before the latest synched image-imu message to the OutBuffer
 {
-  std::deque<stereo_inertial> imuStruct;
+  struct stereo_inertial imuStruct;
 
-  for(auto i=imuBuffer.begin(); i<=imuBuffer.end(); i++){
-    if(imuSynchedMsg->header.stamp == i->header.stamp){
+  for(auto i=imuBuffer.begin(); i<=imuBuffer.end(); i++){      //for(int i=0; i<=imuBuffer.size(); i++)
+    if(imuSynchedMsg->header.stamp == i->header.stamp){        //imuBuffer.at(i).header.stamp
       imuBuffer.erase(i); // this IMU message has already been added to the OutBuffer
       i--; // start adding messages to OutBuffer from the one earlier message in imuBuffer
       deque<stereo_inertial>::iterator OutBuffposition = OutBuffer.end();
 
-      for(auto j=i; j<=imuBuffer.begin(); j--){
+      for(auto j=i; j<=imuBuffer.begin(); j--){                //for(int j=i; j<=0; j--)
         imuStruct.imu = imuBuffer.at(j);
         OutBuffposition = OutBuffer.insert(OutBuffposition, imuStruct);
         imuBuffer.erase(j);
@@ -133,7 +133,7 @@ void writeToBag(rosbag::Bag& synched_bag)
       imu_msg = OutBuffStruct->imu;
 
       synched_bag.write(imu_topic, imu_msg.header.stamp, imu_msg);
-      if(img0_msg!=NULL && img1_msg!=NULL){
+      if(img0_msg!=NUL && img1_msg!=NUL){
         synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
         synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
       }
