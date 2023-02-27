@@ -20,6 +20,7 @@
 #include <deque>
 #include <iostream>
 #include <cstdio>
+#include <cstddef>
 #include <string>
 
 #include <ros/ros.h>
@@ -83,7 +84,7 @@ void IMU_Buffer_Callback(const sensor_msgs::Imu::ConstPtr& imu_msg)
 
 
 //-------------------------FUNCTIONS-------------------------------------------------------
-void search_imuBuffer(const sensor_msgs::Imu::ConstPtr& imuSynchedMsg)
+void search_imuBuffer(sensor_msgs::Imu imuSynchedMsg)
 // Order the IMU messages and synched image-imu messages in the OutBuffer
 // Look through the messages in the IMU deque to find the message that came through the synchronizer callback
 // Add any earlier IMU messages that occured before the latest synched image-imu message to the OutBuffer
@@ -91,7 +92,7 @@ void search_imuBuffer(const sensor_msgs::Imu::ConstPtr& imuSynchedMsg)
   struct stereo_inertial imuStruct;
 
   for(auto i=imuBuffer.begin(); i<=imuBuffer.end(); i++){      //for(int i=0; i<=imuBuffer.size(); i++)
-    if(imuSynchedMsg->header.stamp == i->header.stamp){        //imuBuffer.at(i).header.stamp
+    if(imuSynchedMsg.header.stamp == i->header.stamp){        //imuBuffer.at(i).header.stamp
       imuBuffer.erase(i); // this IMU message has already been added to the OutBuffer
       i--; // start adding messages to OutBuffer from the one earlier message in imuBuffer
       deque<stereo_inertial>::iterator OutBuffposition = OutBuffer.end();
@@ -133,7 +134,7 @@ void writeToBag(rosbag::Bag& synched_bag)
       imu_msg = OutBuffStruct->imu;
 
       synched_bag.write(imu_topic, imu_msg.header.stamp, imu_msg);
-      if(img0_msg!=NUL && img1_msg!=NUL){
+      if(img0_msg!=NULL && img1_msg!=NULL){
         synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
         synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
       }
@@ -149,7 +150,7 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
   // Load unsynched rosbag
   rosbag::Bag unsynched_bag;
   unsynched_bag.open(filename, rosbag::bagmode::Read);
-  std::deque<std::string> topics; // create a deque of topics to iterate through
+  std::vector<std::string> topics; // create a vector of topics to iterate through
   topics.push_back(cam0_topic);
   topics.push_back(cam1_topic);
   topics.push_back(imu_topic);
