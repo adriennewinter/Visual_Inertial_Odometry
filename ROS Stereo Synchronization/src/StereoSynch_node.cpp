@@ -124,9 +124,6 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
   unsynched_bag.close();
   synched_bag.close();
   cout << "Closing both bag files." << endl;
-  cout << "Total img0 callbacks = " << i << endl;
-  cout << "Total img1 callbacks = " << j << endl;
-  cout << "Total synched messages = " << synchs_cnt << endl;
 }
 
 
@@ -139,6 +136,11 @@ int main(int argc, char** argv)
   ros::NodeHandle nh;
 
   synchronizeBag(rosbagFolderPath+unsynchedBagName, nh);
+
+  cout << "Total img0 callbacks = " << i << endl;
+  cout << "Total img1 callbacks = " << j << endl;
+  cout << "Total synched messages = " << synchs_cnt << endl;
+  cout << "Press Ctrl+C to kill the node." << endl;
 
   ros::spin(); 
  
