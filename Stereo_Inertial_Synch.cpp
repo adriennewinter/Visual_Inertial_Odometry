@@ -48,7 +48,7 @@ struct stereo_inertial {
 };
 
 int synch_cnt, i, j, k = 0; 
-std::deque<stereo_inertial> SynchedMsgs;
+std::deque<stereo_inertial> SynchedMsgs, OutBuffer;
 std::deque<sensor_msgs::Imu> imuBuffer;
 
 
@@ -75,6 +75,7 @@ void SynchCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_ms
 
 
 void IMU_Buffer_Callback(const sensor_msgs::Imu::ConstPtr& imu_msg)
+// Add all IMU messages to a buffer (deque)
 {
   imuBuffer.push_back(*imu_msg);
 }
@@ -82,29 +83,61 @@ void IMU_Buffer_Callback(const sensor_msgs::Imu::ConstPtr& imu_msg)
 
 
 //-------------------------FUNCTIONS-------------------------------------------------------
+void search_imuBuffer(const sensor_msgs::Imu::ConstPtr& imuSynchedMsg)
+// Order the IMU messages and synched image-imu messages in the OutBuffer
+// Look through the messages in the IMU deque to find the message that came through the synchronizer callback
+// Add any earlier IMU messages that occured before the latest synched image-imu message to the OutBuffer
+{
+  std::deque<stereo_inertial> imuStruct;
+
+  for(auto i=imuBuffer.begin(); i<=imuBuffer.end(); i++){
+    if(imuSynchedMsg->header.stamp == i->header.stamp){
+      imuBuffer.erase(i); // this IMU message has already been added to the OutBuffer
+      i--; // start adding messages to OutBuffer from the one earlier message in imuBuffer
+      deque<stereo_inertial>::iterator OutBuffposition = OutBuffer.end();
+
+      for(auto j=i; j<=imuBuffer.begin(); j--){
+        imuStruct.imu = imuBuffer.at(j);
+        OutBuffposition = OutBuffer.insert(OutBuffposition, imuStruct);
+        imuBuffer.erase(j);
+      }
+      break;
+    }
+  }
+}
+
+
+
 void writeToBag(rosbag::Bag& synched_bag)
 // Write synchronized messages to the synched rosbag
 {
   sensor_msgs::Image img0_msg, img1_msg;
   sensor_msgs::Imu imu_msg;
-  struct stereo_inertial StereoInertialStruct;
+  struct stereo_inertial StereoInertialStruct, OutBuffStruct;
 
   if(!SynchedMsgs.empty())
   {
-    // Get latest synched messages from the deque and delete them from the deque 
+    // Get latest synched message struct from the deque, delete it from the deque and add it to the OutBuffer
     StereoInertialStruct = SynchedMsgs.front();
     SynchedMsgs.pop_front();
+    OutBuffer.push_back(StereoInertialStruct);
 
-    img0_msg = StereoInertialStruct.img0;
-    img1_msg = StereoInertialStruct.img1;
-    imu_msg = StereoInertialStruct.imu;
+    // Order the IMU messages and synched image-imu messages in the OutBuffer
+    search_imuBuffer(StereoInertialStruct.imu);
 
-    search_imuBuffer(imu_msg);
+    // Get the latest struct messages from OutBuffer to be written to the synched rosbag and delete the used message from OutBuffer
+    for(auto OutBuffStruct=OutBuffer.begin(); OutBuffStruct<=OutBuffer.end(); OutBuffStruct++){
+      OutBuffer.pop_front();
+      img0_msg = OutBuffStruct->img0;
+      img1_msg = OutBuffStruct->img1;
+      imu_msg = OutBuffStruct->imu;
 
-    // Write a synched set of messages to a rosbag
-    synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
-    synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
-    synched_bag.write(imu_topic, imu_msg.header.stamp, imu_msg); 
+      synched_bag.write(imu_topic, imu_msg.header.stamp, imu_msg);
+      if(img0_msg!=NULL && img1_msg!=NULL){
+        synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
+        synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
+      }
+    } 
   }
 }
 
