@@ -49,7 +49,7 @@ struct stereo_inertial {
 };
 
 int synch_cnt, i, j, k = 0; 
-std::deque<stereo_inertial> SynchedMsgs, OutBuffer;
+std::deque<stereo_inertial> SynchedMsgsBuffer, OutBuffer;
 std::deque<sensor_msgs::Imu> imuBuffer;
 
 
@@ -60,22 +60,22 @@ std::deque<sensor_msgs::Imu> imuBuffer;
 void SynchCallback(const sensor_msgs::Image::ConstPtr& img0_msg, const sensor_msgs::Image::ConstPtr& img1_msg, const sensor_msgs::Imu::ConstPtr& imu_msg)
 // Callback for synchronizing stereo messages with imu messages - higher IMU rate gets lost 
 { 
-  struct stereo_inertial StereoInertialStruct;
+  struct stereo_inertial SynchedMsgsStruct;
 
   // Insert synched messages into the struct
-  StereoInertialStruct.img0 = *img0_msg;
-  StereoInertialStruct.img1 = *img1_msg;
-  StereoInertialStruct.imu = *imu_msg;
+  SynchedMsgsStruct.img0 = *img0_msg;
+  SynchedMsgsStruct.img1 = *img1_msg;
+  SynchedMsgsStruct.imu = *imu_msg;
 
   // Insert the struct into the deque
-  SynchedMsgs.push_back(StereoInertialStruct);
+  SynchedMsgsBuffer.push_back(SynchedMsgsStruct);
 
   synch_cnt += 1;
 }
 
 
 
-void IMU_Buffer_Callback(const sensor_msgs::Imu::ConstPtr& imu_msg)
+void imuBufferCallback(const sensor_msgs::Imu::ConstPtr& imu_msg)
 // Add all IMU messages to a buffer (deque)
 {
   imuBuffer.push_back(*imu_msg);
@@ -84,28 +84,39 @@ void IMU_Buffer_Callback(const sensor_msgs::Imu::ConstPtr& imu_msg)
 
 
 //-------------------------FUNCTIONS-------------------------------------------------------
-void search_imuBuffer(sensor_msgs::Imu imuSynchedMsg)
+void orderOutBuffer()
 // Order the IMU messages and synched image-imu messages in the OutBuffer
-// Look through the messages in the IMU deque to find the message that came through the synchronizer callback
-// Add any earlier IMU messages that occured before the latest synched image-imu message to the OutBuffer
 {
-  struct stereo_inertial imuStruct;
+  cout << "orderOutBuffer" << endl;
+  struct stereo_inertial SynchedMsgsStruct, imuStruct;
 
-  for(auto i=imuBuffer.begin(); i<=imuBuffer.end(); i++){      //for(int i=0; i<=imuBuffer.size(); i++)
-    if(imuSynchedMsg.header.stamp == i->header.stamp){        //imuBuffer.at(i).header.stamp
-      imuBuffer.erase(i); // this IMU message has already been added to the OutBuffer
-      i--; // start adding messages to OutBuffer from the one earlier message in imuBuffer
-      deque<stereo_inertial>::iterator OutBuffposition = OutBuffer.end();
+  // Get latest synched message struct from the SynchedMsgsBuffer, delete it from the deque and add it to the OutBuffer
+  SynchedMsgsStruct = SynchedMsgsBuffer.front();
+  SynchedMsgsBuffer.pop_front();
+  OutBuffer.push_back(SynchedMsgsStruct);
 
-      for(auto j=i; j<=imuBuffer.begin(); j--){                //for(int j=i; j<=0; j--)
+  // Look through the messages in the imuBuffer to find the same message that came through the synchronizer callback
+  deque<sensor_msgs::Imu>::iterator imu_pos = imuBuffer.begin();
+  for(int i=0; i<=imuBuffer.size(); i++){      
+    if(SynchedMsgsStruct.imu.header.stamp == imuBuffer.at(i).header.stamp){        
+      imuBuffer.erase(imu_pos); // this IMU message has already been added to the OutBuffer
+      i--; 
+      imu_pos--;
+      deque<stereo_inertial>::iterator out_pos = OutBuffer.end();
+
+      // Add any earlier IMU messages that occured before the latest synched image-imu message to the OutBuffer
+      for(int j=i; j>=0; j--){               
         imuStruct.imu = imuBuffer.at(j);
-        OutBuffposition = OutBuffer.insert(OutBuffposition, imuStruct);
-        imuBuffer.erase(j);
+        out_pos = OutBuffer.insert(out_pos, imuStruct);
+        imuBuffer.erase(imu_pos);
+        imu_pos--;
       }
       break;
     }
+    imu_pos++;
   }
 }
+
 
 
 
@@ -114,33 +125,30 @@ void writeToBag(rosbag::Bag& synched_bag)
 {
   sensor_msgs::Image img0_msg, img1_msg;
   sensor_msgs::Imu imu_msg;
-  struct stereo_inertial StereoInertialStruct, OutBuffStruct;
+  struct stereo_inertial OutBuffStruct;
 
-  if(!SynchedMsgs.empty())
+  if(!SynchedMsgsBuffer.empty())
   {
-    // Get latest synched message struct from the deque, delete it from the deque and add it to the OutBuffer
-    StereoInertialStruct = SynchedMsgs.front();
-    SynchedMsgs.pop_front();
-    OutBuffer.push_back(StereoInertialStruct);
-
     // Order the IMU messages and synched image-imu messages in the OutBuffer
-    search_imuBuffer(StereoInertialStruct.imu);
+    orderOutBuffer();
 
     // Get the latest struct messages from OutBuffer to be written to the synched rosbag and delete the used message from OutBuffer
+    cout << "writeToBag" << endl;
     for(auto OutBuffStruct=OutBuffer.begin(); OutBuffStruct<=OutBuffer.end(); OutBuffStruct++){
-      OutBuffer.pop_front();
       img0_msg = OutBuffStruct->img0;
       img1_msg = OutBuffStruct->img1;
       imu_msg = OutBuffStruct->imu;
+      OutBuffer.pop_front();
 
       synched_bag.write(imu_topic, imu_msg.header.stamp, imu_msg);
-      if(img0_msg!=NULL && img1_msg!=NULL){
+      if(img0_msg.header.stamp!=ros::TIME_MIN && img1_msg.header.stamp!=ros::TIME_MIN){
         synched_bag.write(cam0_topic, img0_msg.header.stamp, img0_msg); 
         synched_bag.write(cam1_topic, img1_msg.header.stamp, img1_msg);
       }
     } 
   }
 }
+
 
 
 
@@ -174,7 +182,7 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
   sync.registerCallback(boost::bind(&SynchCallback, _1, _2, _3));
 
   // Register the IMU Buffer Callback
-  imu_sub.registerCallback(IMU_Buffer_Callback);
+  imu_sub.registerCallback(imuBufferCallback);
 
   // Iterate through all messages on all topics in the bag and send them to their callbacks
   cout << "Writing to synched bag file. This will take a few minutes..." << endl;
@@ -200,7 +208,7 @@ void synchronizeBag(const std::string& filename, ros::NodeHandle& nh)
     {
       sensor_msgs::Imu::ConstPtr imu = msg.instantiate<sensor_msgs::Imu>();
       if (imu != NULL)
-        imu_sub.signalMessage(imu); // call the SynchCallback and IMU_Buffer_Callback
+        imu_sub.signalMessage(imu); // call the SynchCallback and imuBufferCallback
         k += 1;
     }
 
